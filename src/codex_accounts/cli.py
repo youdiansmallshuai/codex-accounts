@@ -2,9 +2,11 @@ import argparse
 import base64
 import json
 import os
+import random
 import re
 import shutil
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -237,6 +239,96 @@ def print_live_usage_block(usage: dict, prefix: str = "") -> None:
     )
 
 
+def safe_fetch_live_usage(auth: dict) -> tuple[dict | None, str | None]:
+    try:
+        return fetch_live_usage(auth), None
+    except SystemExit as exc:
+        code = exc.code if hasattr(exc, "code") else exc
+        return None, f"获取失败 ({code})"
+
+
+def render_dashboard_once(paths: list[Path], live_account_id: str) -> None:
+    print("账号用量面板")
+    print("")
+    for path in paths:
+        auth = load_json(path)
+        meta = parse_auth_metadata(auth)
+        marker = "*" if meta["account_id"] == live_account_id and live_account_id else " "
+        print(f"{marker} {path.stem}")
+        print(f"  邮箱    {meta['email']}")
+        usage, error = safe_fetch_live_usage(auth)
+        if usage is not None:
+            print_live_usage_block(usage, prefix="  ")
+        else:
+            print(f"  用量    {error}")
+        print("")
+
+
+def pick_refresh_seconds(is_live: bool) -> int:
+    if is_live:
+        return random.randint(1, 5) * 60
+    return random.randint(5, 10) * 60
+
+
+def cmd_dashboard_watch(paths: list[Path]) -> None:
+    state: dict[str, dict] = {}
+    for path in paths:
+        state[path.stem] = {
+            "usage": None,
+            "error": "等待首次刷新",
+            "last_updated_at": None,
+            "next_refresh_at": 0.0,
+            "was_live": False,
+        }
+
+    while True:
+        now = time.time()
+        live_account_id = current_account_id()
+        rows: list[tuple[Path, dict, dict]] = []
+        for path in paths:
+            auth = load_json(path)
+            meta = parse_auth_metadata(auth)
+            rows.append((path, auth, meta))
+
+        for path, auth, meta in rows:
+            is_live = bool(live_account_id and meta["account_id"] == live_account_id)
+            item = state[path.stem]
+            role_changed_to_live = is_live and not item["was_live"]
+            due = now >= item["next_refresh_at"] or role_changed_to_live
+            if due:
+                usage, error = safe_fetch_live_usage(auth)
+                item["usage"] = usage
+                item["error"] = error
+                item["last_updated_at"] = now
+                item["next_refresh_at"] = now + pick_refresh_seconds(is_live)
+            item["was_live"] = is_live
+
+        os.system("clear")
+        print("账号用量面板 (实时)")
+        print("刷新策略: 当前账号 1-5 分钟, 其他账号 5-10 分钟")
+        print("按 Ctrl+C 退出")
+        print("")
+
+        now = time.time()
+        for path, _, meta in rows:
+            is_live = bool(live_account_id and meta["account_id"] == live_account_id)
+            marker = "*" if is_live else " "
+            item = state[path.stem]
+            print(f"{marker} {path.stem}")
+            print(f"  邮箱    {meta['email']}")
+            if item["usage"] is not None:
+                print_live_usage_block(item["usage"], prefix="  ")
+            else:
+                print(f"  用量    {item['error']}")
+            print(f"  上次刷新 {format_ts(item['last_updated_at'])}")
+            print(f"  下次刷新约 {format_duration(int(item['next_refresh_at'] - now))} 后")
+            print("")
+
+        soonest = min(state[path.stem]["next_refresh_at"] for path in paths)
+        wait_seconds = max(1, min(10, int(soonest - time.time())))
+        time.sleep(wait_seconds)
+
+
 def cmd_save(args: argparse.Namespace) -> None:
     ensure_accounts_dir()
     if not AUTH_FILE.exists():
@@ -304,7 +396,7 @@ def cmd_limits(args: argparse.Namespace) -> None:
     print_limits_block(meta["plan"])
 
 
-def cmd_dashboard(_: argparse.Namespace) -> None:
+def cmd_dashboard(args: argparse.Namespace) -> None:
     ensure_accounts_dir()
     files = sorted(ACCOUNTS_DIR.glob("*.json"))
     if not files:
@@ -312,22 +404,15 @@ def cmd_dashboard(_: argparse.Namespace) -> None:
         print("先执行: codex-accounts save <名字>")
         return
 
-    live_account_id = current_account_id()
-    print("账号用量面板")
-    print("")
-    for path in files:
-        auth = load_json(path)
-        meta = parse_auth_metadata(auth)
-        marker = "*" if meta["account_id"] == live_account_id and live_account_id else " "
-        print(f"{marker} {path.stem}")
-        print(f"  邮箱    {meta['email']}")
+    if args.watch:
         try:
-            usage = fetch_live_usage(auth)
-            print_live_usage_block(usage, prefix="  ")
-        except SystemExit as exc:
-            code = exc.code if hasattr(exc, "code") else exc
-            print(f"  用量    获取失败 ({code})")
-        print("")
+            cmd_dashboard_watch(files)
+        except KeyboardInterrupt:
+            print("\n已退出实时面板")
+        return
+
+    live_account_id = current_account_id()
+    render_dashboard_once(files, live_account_id)
 
 
 def cmd_usage(args: argparse.Namespace) -> None:
@@ -395,6 +480,11 @@ def build_parser() -> argparse.ArgumentParser:
     limits.set_defaults(func=cmd_limits)
 
     dashboard = sub.add_parser("dashboard", help="查看所有账号的实时用量面板")
+    dashboard.add_argument(
+        "--watch",
+        action="store_true",
+        help="持续动态刷新: 当前账号 1-5 分钟, 其他账号 5-10 分钟",
+    )
     dashboard.set_defaults(func=cmd_dashboard)
 
     usage = sub.add_parser("usage", help="查看单个账号的实时 5 小时/周用量")

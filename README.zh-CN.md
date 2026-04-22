@@ -24,6 +24,7 @@ codex-accounts list
 codex-accounts current
 codex-accounts limits [name]
 codex-accounts dashboard
+codex-accounts dashboard --watch
 codex-accounts usage [name]
 codex-accounts remove <name>
 ```
@@ -59,4 +60,5 @@ codex-accounts --help
 ## 说明
 
 - `dashboard` 和 `usage` 会使用账号内的 access token 调用 `https://chatgpt.com/backend-api/wham/usage`。
+- `dashboard --watch` 会实时动态刷新：当前使用账号随机 `1-5` 分钟刷新一次，未使用账号随机 `5-10` 分钟刷新一次。
 - 输出中的套餐限额是基于 OpenAI Help Center 的静态参考，后续可能变化。

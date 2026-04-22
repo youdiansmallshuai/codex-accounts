@@ -26,6 +26,7 @@ codex-accounts list
 codex-accounts current
 codex-accounts limits [name]
 codex-accounts dashboard
+codex-accounts dashboard --watch
 codex-accounts usage [name]
 codex-accounts remove <name>
 ```
@@ -61,4 +62,5 @@ If your system Python has no `pip`, use symlink mode instead:
 ## Notes
 
 - `dashboard` and `usage` call `https://chatgpt.com/backend-api/wham/usage` with each profile's access token.
+- `dashboard --watch` runs a dynamic refresh loop: active account refreshes every random `1-5` minutes, inactive accounts every random `5-10` minutes.
 - Plan limits in output are static references from OpenAI Help Center and may change over time.
