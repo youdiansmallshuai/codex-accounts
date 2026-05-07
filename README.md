@@ -27,6 +27,7 @@ codex-accounts current
 codex-accounts limits [name]
 codex-accounts dashboard
 codex-accounts dashboard --watch
+codex-accounts dashboard --watch --epd-url http://192.168.0.106
 codex-accounts usage [name]
 codex-accounts remove <name>
 ```
@@ -62,5 +63,7 @@ If your system Python has no `pip`, use symlink mode instead:
 ## Notes
 
 - `dashboard` and `usage` call `https://chatgpt.com/backend-api/wham/usage` with each profile's access token.
-- `dashboard --watch` runs a dynamic refresh loop: active account refreshes every random `1-5` minutes, inactive accounts every random `5-10` minutes.
+- `dashboard --watch` shows a compact color monitoring panel and runs a dynamic refresh loop: active account refreshes every random `1-5` minutes, inactive accounts every random `5-10` minutes.
+- In split terminals or other small windows, the live panel prioritizes the active account and hides later accounts by terminal height so at least three accounts can remain fully visible when space allows.
+- `dashboard --watch --epd-url http://192.168.0.106` renders a `400x300` tri-color EPD dashboard and pushes it to ESP32 `POST /push` after each real usage-data refresh. Set `CODEX_ACCOUNTS_EPD_URL` to make the EPD URL the default.
 - Plan limits in output are static references from OpenAI Help Center and may change over time.

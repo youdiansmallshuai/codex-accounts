@@ -25,6 +25,7 @@ codex-accounts current
 codex-accounts limits [name]
 codex-accounts dashboard
 codex-accounts dashboard --watch
+codex-accounts dashboard --watch --epd-url http://192.168.0.106
 codex-accounts usage [name]
 codex-accounts remove <name>
 ```
@@ -60,5 +61,7 @@ codex-accounts --help
 ## 说明
 
 - `dashboard` 和 `usage` 会使用账号内的 access token 调用 `https://chatgpt.com/backend-api/wham/usage`。
-- `dashboard --watch` 会实时动态刷新：当前使用账号随机 `1-5` 分钟刷新一次，未使用账号随机 `5-10` 分钟刷新一次。
+- `dashboard --watch` 会显示紧凑彩色监控面板，并实时动态刷新：当前使用账号随机 `1-5` 分钟刷新一次，未使用账号随机 `5-10` 分钟刷新一次。
+- 在分割终端等小窗口里，实时面板会优先显示当前账号并按高度隐藏后续账号，尽量保证至少三个账号完整可见。
+- `dashboard --watch --epd-url http://192.168.0.106` 会在每次用量数据实际刷新后，生成 `400x300` 三色墨水屏画面并通过 `POST /push` 推送到 ESP32。也可以用环境变量 `CODEX_ACCOUNTS_EPD_URL` 设置默认地址。
 - 输出中的套餐限额是基于 OpenAI Help Center 的静态参考，后续可能变化。
